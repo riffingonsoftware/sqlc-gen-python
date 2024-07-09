@@ -2,7 +2,7 @@ package python
 
 import (
 	"context"
-	json "encoding/json"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -106,13 +106,15 @@ func (v QueryValue) RowNode(rowVar string) *pyast.Node {
 		Func: v.Annotation(),
 	}
 	for i, f := range v.Struct.Fields {
-		call.Keywords = append(call.Keywords, &pyast.Keyword{
-			Arg: f.Name,
-			Value: subscriptNode(
-				rowVar,
-				constantInt(i),
-			),
-		})
+		call.Keywords = append(
+			call.Keywords, &pyast.Keyword{
+				Arg: f.Name,
+				Value: subscriptNode(
+					rowVar,
+					constantInt(i),
+				),
+			},
+		)
 	}
 	return &pyast.Node{
 		Node: &pyast.Node_Call{
@@ -137,17 +139,21 @@ type Query struct {
 func (q Query) AddArgs(args *pyast.Arguments) {
 	// A single struct arg does not need to be passed as a keyword argument
 	if len(q.Args) == 1 && q.Args[0].IsStruct() {
-		args.Args = append(args.Args, &pyast.Arg{
-			Arg:        q.Args[0].Name,
-			Annotation: q.Args[0].Annotation(),
-		})
+		args.Args = append(
+			args.Args, &pyast.Arg{
+				Arg:        q.Args[0].Name,
+				Annotation: q.Args[0].Annotation(),
+			},
+		)
 		return
 	}
 	for _, a := range q.Args {
-		args.KwOnlyArgs = append(args.KwOnlyArgs, &pyast.Arg{
-			Arg:        a.Name,
-			Annotation: a.Annotation(),
-		})
+		args.KwOnlyArgs = append(
+			args.KwOnlyArgs, &pyast.Arg{
+				Arg:        a.Name,
+				Annotation: a.Annotation(),
+			},
+		)
 	}
 }
 
@@ -193,6 +199,8 @@ func pyInnerType(req *plugin.GenerateRequest, col *plugin.Column) string {
 	switch req.Settings.Engine {
 	case "postgresql":
 		return postgresType(req, col)
+	case "sqlite":
+		return sqliteType(req, col)
 	default:
 		log.Println("unsupported engine type")
 		return "Any"
@@ -244,11 +252,13 @@ func buildEnums(req *plugin.GenerateRequest) []Enum {
 				Comment: enum.Comment,
 			}
 			for _, v := range enum.Vals {
-				e.Constants = append(e.Constants, Constant{
-					Name:  pyEnumValueName(v),
-					Value: v,
-					Type:  e.Name,
-				})
+				e.Constants = append(
+					e.Constants, Constant{
+						Name:  pyEnumValueName(v),
+						Value: v,
+						Type:  e.Name,
+					},
+				)
 			}
 			enums = append(enums, e)
 		}
@@ -274,10 +284,12 @@ func buildModels(conf Config, req *plugin.GenerateRequest) []Struct {
 			}
 			structName := tableName
 			if !conf.EmitExactTableNames {
-				structName = inflection.Singular(inflection.SingularParams{
-					Name:       structName,
-					Exclusions: conf.InflectionExcludeTableNames,
-				})
+				structName = inflection.Singular(
+					inflection.SingularParams{
+						Name:       structName,
+						Exclusions: conf.InflectionExcludeTableNames,
+					},
+				)
 			}
 			s := Struct{
 				Table:   plugin.Identifier{Schema: schema.Name, Name: table.Rel.Name},
@@ -287,11 +299,13 @@ func buildModels(conf Config, req *plugin.GenerateRequest) []Struct {
 			for _, column := range table.Columns {
 				typ := makePyType(req, column) // TODO: This used to call compiler.ConvertColumn?
 				typ.InnerType = strings.TrimPrefix(typ.InnerType, "models.")
-				s.Fields = append(s.Fields, Field{
-					Name:    column.Name,
-					Type:    typ,
-					Comment: column.Comment,
-				})
+				s.Fields = append(
+					s.Fields, Field{
+						Name:    column.Name,
+						Type:    typ,
+						Comment: column.Comment,
+					},
+				)
 			}
 			structs = append(structs, s)
 		}
@@ -342,16 +356,19 @@ func columnsToStruct(req *plugin.GenerateRequest, name string, columns []pyColum
 		if suffix > 0 {
 			fieldName = fmt.Sprintf("%s_%d", fieldName, suffix)
 		}
-		gs.Fields = append(gs.Fields, Field{
-			Name: fieldName,
-			Type: makePyType(req, c.Column),
-		})
+		gs.Fields = append(
+			gs.Fields, Field{
+				Name: fieldName,
+				Type: makePyType(req, c.Column),
+			},
+		)
 		seen[colName]++
 	}
 	return &gs
 }
 
 var postgresPlaceholderRegexp = regexp.MustCompile(`\B\$(\d+)\b`)
+var sqlitePlaceholderRegexp = regexp.MustCompile(`\B\?(\d+)\b`)
 
 // Sqlalchemy uses ":name" for placeholders, so "$N" is converted to ":pN"
 // This also means ":" has special meaning to sqlalchemy, so it must be escaped.
@@ -359,6 +376,9 @@ func sqlalchemySQL(s, engine string) string {
 	s = strings.ReplaceAll(s, ":", `\\:`)
 	if engine == "postgresql" {
 		return postgresPlaceholderRegexp.ReplaceAllString(s, ":p$1")
+	}
+	if engine == "sqlite" {
+		return sqlitePlaceholderRegexp.ReplaceAllString(s, ":p$1")
 	}
 	return s
 }
@@ -398,23 +418,29 @@ func buildQueries(conf Config, req *plugin.GenerateRequest, structs []Struct) ([
 		if len(query.Params) > qpl || qpl == 0 {
 			var cols []pyColumn
 			for _, p := range query.Params {
-				cols = append(cols, pyColumn{
-					id:     p.Number,
-					Column: p.Column,
-				})
+				cols = append(
+					cols, pyColumn{
+						id:     p.Number,
+						Column: p.Column,
+					},
+				)
 			}
-			gq.Args = []QueryValue{{
-				Emit:   true,
-				Name:   "arg",
-				Struct: columnsToStruct(req, query.Name+"Params", cols),
-			}}
+			gq.Args = []QueryValue{
+				{
+					Emit:   true,
+					Name:   "arg",
+					Struct: columnsToStruct(req, query.Name+"Params", cols),
+				},
+			}
 		} else {
 			args := make([]QueryValue, 0, len(query.Params))
 			for _, p := range query.Params {
-				args = append(args, QueryValue{
-					Name: paramName(p),
-					Typ:  makePyType(req, p.Column),
-				})
+				args = append(
+					args, QueryValue{
+						Name: paramName(p),
+						Typ:  makePyType(req, p.Column),
+					},
+				)
 			}
 			gq.Args = args
 		}
@@ -456,10 +482,12 @@ func buildQueries(conf Config, req *plugin.GenerateRequest, structs []Struct) ([
 			if gs == nil {
 				var columns []pyColumn
 				for i, c := range query.Columns {
-					columns = append(columns, pyColumn{
-						id:     int32(i),
-						Column: c,
-					})
+					columns = append(
+						columns, pyColumn{
+							id:     int32(i),
+							Column: c,
+						},
+					)
 				}
 				gs = columnsToStruct(req, query.Name+"Row", columns)
 				emit = true
@@ -492,7 +520,8 @@ func moduleNode(version, source string) *pyast.Module {
 		},
 	}
 	if source != "" {
-		mod.Body = append(mod.Body,
+		mod.Body = append(
+			mod.Body,
 			poet.Comment(
 				"source: "+source,
 			),
@@ -657,11 +686,13 @@ func buildImportGroup(specs map[string]importSpec) *pyast.Node {
 			for _, name := range spec.Names {
 				imp.Names = append(imp.Names, poet.Alias(name))
 			}
-			body = append(body, &pyast.Node{
-				Node: &pyast.Node_ImportFrom{
-					ImportFrom: imp,
+			body = append(
+				body, &pyast.Node{
+					Node: &pyast.Node_ImportFrom{
+						ImportFrom: imp,
+					},
 				},
-			})
+			)
 		} else {
 			body = append(body, importNode(spec.Module))
 		}
@@ -689,22 +720,26 @@ func buildModelsTree(ctx *pyTmplCtx, i *importer) *pyast.Node {
 			},
 		}
 		if e.Comment != "" {
-			def.Body = append(def.Body, &pyast.Node{
-				Node: &pyast.Node_Expr{
-					Expr: &pyast.Expr{
-						Value: poet.Constant(e.Comment),
+			def.Body = append(
+				def.Body, &pyast.Node{
+					Node: &pyast.Node_Expr{
+						Expr: &pyast.Expr{
+							Value: poet.Constant(e.Comment),
+						},
 					},
 				},
-			})
+			)
 		}
 		for _, c := range e.Constants {
 			def.Body = append(def.Body, assignNode(c.Name, poet.Constant(c.Value)))
 		}
-		mod.Body = append(mod.Body, &pyast.Node{
-			Node: &pyast.Node_ClassDef{
-				ClassDef: def,
+		mod.Body = append(
+			mod.Body, &pyast.Node{
+				Node: &pyast.Node_ClassDef{
+					ClassDef: def,
+				},
 			},
-		})
+		)
 	}
 
 	for _, m := range ctx.Models {
@@ -715,22 +750,26 @@ func buildModelsTree(ctx *pyTmplCtx, i *importer) *pyast.Node {
 			def = dataclassNode(m.Name)
 		}
 		if m.Comment != "" {
-			def.Body = append(def.Body, &pyast.Node{
-				Node: &pyast.Node_Expr{
-					Expr: &pyast.Expr{
-						Value: poet.Constant(m.Comment),
+			def.Body = append(
+				def.Body, &pyast.Node{
+					Node: &pyast.Node_Expr{
+						Expr: &pyast.Expr{
+							Value: poet.Constant(m.Comment),
+						},
 					},
 				},
-			})
+			)
 		}
 		for _, f := range m.Fields {
 			def.Body = append(def.Body, fieldNode(f))
 		}
-		mod.Body = append(mod.Body, &pyast.Node{
-			Node: &pyast.Node_ClassDef{
-				ClassDef: def,
+		mod.Body = append(
+			mod.Body, &pyast.Node{
+				Node: &pyast.Node_ClassDef{
+					ClassDef: def,
+				},
 			},
-		})
+		)
 	}
 
 	return &pyast.Node{Node: &pyast.Node_Module{Module: mod}}
@@ -816,16 +855,18 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 	mod := moduleNode(ctx.SqlcVersion, source)
 	std, pkg := i.queryImportSpecs(source)
 	mod.Body = append(mod.Body, buildImportGroup(std), buildImportGroup(pkg))
-	mod.Body = append(mod.Body, &pyast.Node{
-		Node: &pyast.Node_ImportGroup{
-			ImportGroup: &pyast.ImportGroup{
-				Imports: []*pyast.Node{
-					{
-						Node: &pyast.Node_ImportFrom{
-							ImportFrom: &pyast.ImportFrom{
-								Module: ctx.C.Package,
-								Names: []*pyast.Node{
-									poet.Alias("models"),
+	mod.Body = append(
+		mod.Body, &pyast.Node{
+			Node: &pyast.Node_ImportGroup{
+				ImportGroup: &pyast.ImportGroup{
+					Imports: []*pyast.Node{
+						{
+							Node: &pyast.Node_ImportFrom{
+								ImportFrom: &pyast.ImportFrom{
+									Module: ctx.C.Package,
+									Names: []*pyast.Node{
+										poet.Alias("models"),
+									},
 								},
 							},
 						},
@@ -833,7 +874,7 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 				},
 			},
 		},
-	})
+	)
 
 	for _, q := range ctx.Queries {
 		if !ctx.OutputQuery(q.SourceName) {
@@ -891,12 +932,15 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 
 			switch q.Cmd {
 			case ":one":
-				f.Body = append(f.Body,
-					assignNode("row", poet.Node(
-						&pyast.Call{
-							Func: poet.Attribute(exec, "first"),
-						},
-					)),
+				f.Body = append(
+					f.Body,
+					assignNode(
+						"row", poet.Node(
+							&pyast.Call{
+								Func: poet.Attribute(exec, "first"),
+							},
+						),
+					),
 					poet.Node(
 						&pyast.If{
 							Test: poet.Node(
@@ -921,7 +965,8 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 				)
 				f.Returns = subscriptNode("Optional", q.Ret.Annotation())
 			case ":many":
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					assignNode("result", exec),
 					poet.Node(
 						&pyast.For{
@@ -942,13 +987,15 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 				f.Body = append(f.Body, exec)
 				f.Returns = poet.Constant(nil)
 			case ":execrows":
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					assignNode("result", exec),
 					poet.Return(poet.Attribute(poet.Name("result"), "rowcount")),
 				)
 				f.Returns = poet.Name("int")
 			case ":execresult":
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					poet.Return(exec),
 				)
 				f.Returns = typeRefNode("sqlalchemy", "engine", "Result")
@@ -983,12 +1030,15 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 
 			switch q.Cmd {
 			case ":one":
-				f.Body = append(f.Body,
-					assignNode("row", poet.Node(
-						&pyast.Call{
-							Func: poet.Attribute(poet.Await(exec), "first"),
-						},
-					)),
+				f.Body = append(
+					f.Body,
+					assignNode(
+						"row", poet.Node(
+							&pyast.Call{
+								Func: poet.Attribute(poet.Await(exec), "first"),
+							},
+						),
+					),
 					poet.Node(
 						&pyast.If{
 							Test: poet.Node(
@@ -1014,7 +1064,8 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 				f.Returns = subscriptNode("Optional", q.Ret.Annotation())
 			case ":many":
 				stream := connMethodNode("stream", q.ConstantName, q.ArgDictNode())
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					assignNode("result", poet.Await(stream)),
 					poet.Node(
 						&pyast.AsyncFor{
@@ -1035,13 +1086,15 @@ func buildQueryTree(ctx *pyTmplCtx, i *importer, source string) *pyast.Node {
 				f.Body = append(f.Body, poet.Await(exec))
 				f.Returns = poet.Constant(nil)
 			case ":execrows":
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					assignNode("result", poet.Await(exec)),
 					poet.Return(poet.Attribute(poet.Name("result"), "rowcount")),
 				)
 				f.Returns = poet.Name("int")
 			case ":execresult":
-				f.Body = append(f.Body,
+				f.Body = append(
+					f.Body,
 					poet.Return(poet.Await(exec)),
 				)
 				f.Returns = typeRefNode("sqlalchemy", "engine", "Result")
@@ -1128,10 +1181,12 @@ func Generate(_ context.Context, req *plugin.GenerateRequest) (*plugin.GenerateR
 	resp := plugin.GenerateResponse{}
 
 	for filename, code := range output {
-		resp.Files = append(resp.Files, &plugin.File{
-			Name:     filename,
-			Contents: []byte(code),
-		})
+		resp.Files = append(
+			resp.Files, &plugin.File{
+				Name:     filename,
+				Contents: []byte(code),
+			},
+		)
 	}
 
 	return &resp, nil

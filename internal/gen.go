@@ -368,7 +368,7 @@ func columnsToStruct(req *plugin.GenerateRequest, name string, columns []pyColum
 }
 
 var postgresPlaceholderRegexp = regexp.MustCompile(`\B\$(\d+)\b`)
-var sqlitePlaceholderRegexp = regexp.MustCompile(`\B\?(\d+)\b`)
+var sqlitePlaceholderRegexp = regexp.MustCompile(`\B[?$@](\d+)\b`)
 
 // Sqlalchemy uses ":name" for placeholders, so "$N" is converted to ":pN"
 // This also means ":" has special meaning to sqlalchemy, so it must be escaped.

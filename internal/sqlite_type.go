@@ -2,38 +2,35 @@ package python
 
 import (
 	"log"
+	"strings"
 
 	"github.com/sqlc-dev/plugin-sdk-go/plugin"
 	"github.com/sqlc-dev/plugin-sdk-go/sdk"
 )
 
 func sqliteType(req *plugin.GenerateRequest, col *plugin.Column) string {
-	columnType := sdk.DataType(col.Type)
+	columnType := strings.ToLower(sdk.DataType(col.Type))
 
 	switch columnType {
-	case "INTEGER", "INT", "TINYINT", "SMALLINT", "MEDIUMINT", "BIGINT", "INT2", "INT8":
+	case "int", "integer", "tinyint", "smallint", "mediumint", "bigint", "unsigned big int", "int2", "int8":
 		return "int"
-	case "REAL", "DOUBLE", "DOUBLE PRECISION", "FLOAT":
+	case "real", "double", "double precision", "float":
 		return "float"
-	case "NUMERIC", "DECIMAL":
+	case "numeric", "decimal":
 		return "decimal.Decimal"
-	case "BOOLEAN":
+	case "boolean":
 		return "bool"
-	case "JSON":
+	case "json":
 		return "Any"
-	case "BLOB":
+	case "blob":
 		return "memoryview"
-	case "DATE":
+	case "date":
 		return "datetime.date"
-	case "TIME":
-		return "datetime.time"
-	case "DATETIME", "TIMESTAMP":
+	case "datetime":
 		return "datetime.datetime"
-	case "TEXT", "CHARACTER", "VARCHAR", "NCHAR", "NVARCHAR", "CLOB":
+	case "text", "character", "varchar", "nchar", "nvarchar", "clob":
 		return "str"
 	default:
-		// SQLite doesn't have built-in UUID, INET, CIDR, MACADDR, or INTERVAL types
-		// It also doesn't have an ENUM type, but we'll keep the enum check for consistency
 		for _, schema := range req.Catalog.Schemas {
 			for _, enum := range schema.Enums {
 				if columnType == enum.Name {
